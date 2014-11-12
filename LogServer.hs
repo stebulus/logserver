@@ -7,7 +7,8 @@ import Data.Version (showVersion)
 import Network.Wai
     (Application, responseLBS, requestMethod, requestBody, Request)
 import Network.HTTP.Types (status200, status405, methodPost)
-import Network.Wai.Handler.Warp (run, Port)
+import Network.Wai.Handler.Warp
+    (runSettings, setHost, setPort, defaultSettings, Port)
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitWith, ExitCode(..))
 import System.IO
@@ -27,7 +28,8 @@ main = do
         Right (RunServer port filename) ->
             withFile filename AppendMode $ \h -> do
                 mh <- newMVar h
-                run port (app mh)
+                runSettings (setHost "127.0.0.1" $ setPort port defaultSettings)
+                            (app mh)
 
 app :: MVar Handle -> Application
 app log req respond =

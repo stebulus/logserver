@@ -18,3 +18,4 @@ and then, in another terminal window,
     cat mylogfile
 
 This server is really just an exercise; it has obvious security weaknesses.
+To partially mitigate them, it is hard-coded to listen only on 127.0.0.1.
