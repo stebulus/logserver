@@ -3,6 +3,7 @@ import Control.Concurrent.MVar (newMVar, takeMVar, putMVar, MVar)
 import Control.Exception (bracket)
 import Data.ByteString (empty, hPut)
 import Data.Maybe (listToMaybe)
+import Data.Version (showVersion)
 import Network.Wai
     (Application, responseLBS, requestMethod, requestBody, Request)
 import Network.HTTP.Types (status200, status405, methodPost)
@@ -12,6 +13,8 @@ import System.Exit (exitWith, ExitCode(..))
 import System.IO
     (stderr, hPutStrLn, withFile, IOMode(AppendMode), Handle, hFlush)
 
+import Paths_logserver (version)
+
 main = do
     args <- getArgs
     progname <- getProgName
@@ -19,7 +22,9 @@ main = do
         Left err -> do
             hPutStrLn stderr err
             exitWith $ ExitFailure 2
-        Right (port, filename) ->
+        Right ShowVersion ->
+            putStrLn $ "logserver-" ++ (showVersion version)
+        Right (RunServer port filename) ->
             withFile filename AppendMode $ \h -> do
                 mh <- newMVar h
                 run port (app mh)
@@ -59,13 +64,19 @@ maybeRead s = do
     if unparsed == "" then Just a else Nothing
 
 usage :: String -> String
-usage progname = "usage: " ++ progname ++ " port filename"
+usage progname = "usage: " ++ progname ++ " port filename\n\
+                 \       " ++ progname ++ " --version"
 
-parseArgs :: String -> [String] -> Either String (Int,String)
+data Action = RunServer Int String
+            | ShowVersion
+
+parseArgs :: String -> [String] -> Either String Action
+parseArgs _ [verflag]
+    | verflag == "--version" = Right ShowVersion
 parseArgs _ [port,filename] =
     case maybeRead port of
         Nothing ->
             Left $ "error: cannot interpret " ++ port ++ " as an integer"
         Just n ->
-            Right (n, filename)
+            Right $ RunServer n filename
 parseArgs progname _ = Left $ usage progname
