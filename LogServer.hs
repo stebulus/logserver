@@ -29,7 +29,7 @@ app log req respond =
     if requestMethod req == methodPost
       then
         bracket (takeMVar log)
-                (\h -> putMVar log h)
+                (putMVar log)
                 (\h -> do while (/= empty)
                                 (requestBody req)
                                 (hPut h)
