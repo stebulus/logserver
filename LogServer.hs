@@ -24,22 +24,6 @@ main = do
                 mh <- newMVar h
                 run port (app mh)
 
-copyChunk :: Request -> Handle -> IO Bool
-copyChunk req h = do
-    chunk <- requestBody req
-    if chunk == ""
-      then return False
-      else do
-        hPut h chunk
-        return True
-
-copyAll :: Request -> Handle -> IO ()
-copyAll req h = do
-    result <- copyChunk req h
-    if result
-      then copyAll req h
-      else return ()
-
 app :: MVar Handle -> Application
 app log req respond =
     if requestMethod req == methodPost
@@ -57,6 +41,22 @@ app log req respond =
             status405
             [("Allow", "POST"), ("Content-Type", "text/plain")]
             "Only POST to this server.\r\n"
+
+copyChunk :: Request -> Handle -> IO Bool
+copyChunk req h = do
+    chunk <- requestBody req
+    if chunk == ""
+      then return False
+      else do
+        hPut h chunk
+        return True
+
+copyAll :: Request -> Handle -> IO ()
+copyAll req h = do
+    result <- copyChunk req h
+    if result
+      then copyAll req h
+      else return ()
 
 maybeRead :: (Read a) => String -> Maybe a
 maybeRead s = do
