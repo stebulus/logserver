@@ -39,12 +39,12 @@ app log req respond =
                           respond $ responseLBS
                             status200
                             [("Content-Type", "text/plain")]
-                            "Logged.")
+                            "Logged.\r\n")
       else
         respond $ responseLBS
             status405
             [("Allow", "POST"), ("Content-Type", "text/plain")]
-            "Only POST to this server."
+            "Only POST to this server.\r\n"
 
 maybeRead :: (Read a) => String -> Maybe a
 maybeRead s = do
