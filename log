@@ -1,0 +1,2 @@
+#!/bin/sh
+cat "$@" |curl --data-binary @- http://localhost:3042/
