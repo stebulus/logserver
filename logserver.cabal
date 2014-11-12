@@ -1,0 +1,17 @@
+name:                logserver
+version:             0.1.0.0
+synopsis:            An HTTP server which logs POSTed data to a file.
+-- description:         
+license:             GPL-3
+license-file:        LICENSE
+author:              Steven Taschuk
+maintainer:          steven@amotlpaa.org
+-- copyright:           
+category:            Web
+build-type:          Simple
+cabal-version:       >=1.8
+
+executable logserver
+  main-is:             LogServer.hs
+  -- other-modules:       
+  build-depends:       base ==4.6.*, http-types ==0.8.*, wai ==3.0.*, warp == 3.0.*
