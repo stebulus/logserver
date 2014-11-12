@@ -14,4 +14,5 @@ cabal-version:       >=1.8
 executable logserver
   main-is:             LogServer.hs
   -- other-modules:       
-  build-depends:       base ==4.6.*, http-types ==0.8.*, wai ==3.0.*, warp == 3.0.*
+  build-depends:       base ==4.6.*, bytestring ==0.10.*,
+                       http-types ==0.8.*, wai ==3.0.*, warp == 3.0.*
