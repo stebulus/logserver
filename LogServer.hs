@@ -55,8 +55,8 @@ while pred io act = loop
 
 maybeRead :: (Read a) => String -> Maybe a
 maybeRead s = do
-    (a,xs) <- listToMaybe $ reads s
-    case xs of
+    (a,unparsed) <- listToMaybe $ reads s
+    case unparsed of
         "" -> Just a
         otherwise -> Nothing
 
