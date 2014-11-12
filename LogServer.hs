@@ -9,7 +9,8 @@ import Network.HTTP.Types (status200, status405, methodPost)
 import Network.Wai.Handler.Warp (run)
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitWith, ExitCode(..))
-import System.IO (stderr, hPutStrLn, withFile, IOMode(AppendMode), Handle)
+import System.IO
+    (stderr, hPutStrLn, withFile, IOMode(AppendMode), Handle, hFlush)
 
 copyChunk :: Request -> Handle -> IO Bool
 copyChunk req h = do
@@ -34,6 +35,7 @@ app log req respond =
         bracket (takeMVar log)
                 (\h -> putMVar log h)
                 (\h -> do copyAll req h
+                          hFlush h
                           respond $ responseLBS
                             status200
                             [("Content-Type", "text/plain")]
