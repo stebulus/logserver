@@ -12,6 +12,18 @@ import System.Exit (exitWith, ExitCode(..))
 import System.IO
     (stderr, hPutStrLn, withFile, IOMode(AppendMode), Handle, hFlush)
 
+main = do
+    args <- getArgs
+    progname <- getProgName
+    case parseArgs progname args of
+        Left err -> do
+            hPutStrLn stderr err
+            exitWith $ ExitFailure 2
+        Right (port, filename) -> do
+            withFile filename AppendMode $ \h -> do
+                mh <- newMVar h
+                run port (app mh)
+
 copyChunk :: Request -> Handle -> IO Bool
 copyChunk req h = do
     chunk <- requestBody req
@@ -64,15 +76,3 @@ parseArgs _ [port,filename] =
         Just n ->
             Right (n, filename)
 parseArgs progname _ = Left $ usage progname
-
-main = do
-    args <- getArgs
-    progname <- getProgName
-    case parseArgs progname args of
-        Left err -> do
-            hPutStrLn stderr err
-            exitWith $ ExitFailure 2
-        Right (port, filename) -> do
-            withFile filename AppendMode $ \h -> do
-                mh <- newMVar h
-                run port (app mh)
