@@ -63,7 +63,7 @@ usage progname = "usage: " ++ progname ++ " port filename"
 
 parseArgs :: String -> [String] -> Either String (Int,String)
 parseArgs _ [port,filename] =
-    case maybeRead port :: Maybe Int of
+    case maybeRead port of
         Nothing ->
             Left $ "error: cannot interpret " ++ port ++ " as an integer"
         Just n ->
