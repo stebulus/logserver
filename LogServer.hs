@@ -35,12 +35,12 @@ app log req respond =
                                 (hPut h)
                           hFlush h
                           respond $ responseLBS
-                            status200
+                            status200  -- OK
                             [("Content-Type", "text/plain")]
                             "Logged.\r\n")
       else
         respond $ responseLBS
-            status405
+            status405  -- Method Not Allowed
             [("Allow", "POST"), ("Content-Type", "text/plain")]
             "Only POST to this server.\r\n"
 
