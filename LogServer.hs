@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 import Control.Concurrent.MVar (newMVar, takeMVar, putMVar, MVar)
 import Control.Exception (bracket)
-import Data.ByteString (hPut)
+import Data.ByteString (empty, hPut)
 import Data.Maybe (listToMaybe)
 import Network.Wai
     (Application, responseLBS, requestMethod, requestBody, Request)
@@ -30,7 +30,9 @@ app log req respond =
       then
         bracket (takeMVar log)
                 (\h -> putMVar log h)
-                (\h -> do copyAll req h
+                (\h -> do while (/= empty)
+                                (requestBody req)
+                                (hPut h)
                           hFlush h
                           respond $ responseLBS
                             status200
@@ -42,21 +44,14 @@ app log req respond =
             [("Allow", "POST"), ("Content-Type", "text/plain")]
             "Only POST to this server.\r\n"
 
-copyChunk :: Request -> Handle -> IO Bool
-copyChunk req h = do
-    chunk <- requestBody req
-    if chunk == ""
-      then return False
-      else do
-        hPut h chunk
-        return True
-
-copyAll :: Request -> Handle -> IO ()
-copyAll req h = do
-    result <- copyChunk req h
-    if result
-      then copyAll req h
-      else return ()
+while :: (a->Bool) -> IO a -> (a->IO ()) -> IO ()
+while pred io act = loop
+    where loop = do
+            a <- io
+            if pred a
+              then do act a
+                      loop
+              else return ()
 
 maybeRead :: (Read a) => String -> Maybe a
 maybeRead s = do
