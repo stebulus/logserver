@@ -53,22 +53,26 @@ maybeRead s = do
         "" -> Just a
         otherwise -> Nothing
 
+usage :: String -> String
+usage progname = "usage: " ++ progname ++ " port filename"
+
+parseArgs :: String -> [String] -> Either String (Int,String)
+parseArgs _ [port,filename] =
+    case maybeRead port :: Maybe Int of
+        Nothing ->
+            Left $ "error: cannot interpret " ++ port ++ " as an integer"
+        Just n ->
+            Right (n, filename)
+parseArgs progname _ = Left $ usage progname
+
 main = do
     args <- getArgs
-    if length args /= 2
-      then do
-        name <- getProgName
-        hPutStrLn stderr $ "usage: " ++ name ++ " port filename"
-        exitWith $ ExitFailure 2
-      else do
-        case maybeRead (args!!0) of
-          Nothing -> do
-            hPutStrLn stderr $
-                "error: cannot interpret " ++ args!!0 ++ " as an integer"
+    progname <- getProgName
+    case parseArgs progname args of
+        Left err -> do
+            hPutStrLn stderr err
             exitWith $ ExitFailure 2
-          Just port -> do
-            putStrLn $ "binding to port " ++ show port
-            withFile (args!!1) AppendMode $ \h -> do
-                putStrLn $ "logging to file " ++ (args!!1)
+        Right (port, filename) -> do
+            withFile filename AppendMode $ \h -> do
                 mh <- newMVar h
                 run port (app mh)
