@@ -7,11 +7,11 @@ import Data.Version (showVersion)
 import Network.Wai
     (Application, responseLBS, requestMethod, requestBody, Request)
 import Network.HTTP.Types (status200, status405, methodPost)
-import Network.Wai.Handler.Warp (run)
+import Network.Wai.Handler.Warp (run, Port)
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitWith, ExitCode(..))
 import System.IO
-    (stderr, hPutStrLn, withFile, IOMode(AppendMode), Handle, hFlush)
+    (stderr, hPutStrLn, withFile, IOMode(AppendMode), Handle, hFlush, FilePath)
 
 import Paths_logserver (version)
 
@@ -67,7 +67,7 @@ usage :: String -> String
 usage progname = "usage: " ++ progname ++ " port filename\n\
                  \       " ++ progname ++ " --version"
 
-data Action = RunServer Int String
+data Action = RunServer Port FilePath
             | ShowVersion
 
 parseArgs :: String -> [String] -> Either String Action
