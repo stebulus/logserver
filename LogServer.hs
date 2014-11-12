@@ -56,9 +56,7 @@ while pred io act = loop
 maybeRead :: (Read a) => String -> Maybe a
 maybeRead s = do
     (a,unparsed) <- listToMaybe $ reads s
-    case unparsed of
-        "" -> Just a
-        otherwise -> Nothing
+    if unparsed == "" then Just a else Nothing
 
 usage :: String -> String
 usage progname = "usage: " ++ progname ++ " port filename"
