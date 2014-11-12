@@ -19,7 +19,7 @@ main = do
         Left err -> do
             hPutStrLn stderr err
             exitWith $ ExitFailure 2
-        Right (port, filename) -> do
+        Right (port, filename) ->
             withFile filename AppendMode $ \h -> do
                 mh <- newMVar h
                 run port (app mh)
