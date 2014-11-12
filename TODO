@@ -1,0 +1,3 @@
+* add the ability to pause logging
+  * this should close the log file, to allow the user to edit it manually
+  * right now I have to kill the server and restart it for this
