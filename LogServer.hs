@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 import Control.Concurrent.MVar (newMVar, takeMVar, putMVar, MVar)
 import Control.Exception (bracket)
+import Control.Monad (when)
 import Data.ByteString (empty, hPut)
 import Data.Maybe (listToMaybe)
 import Data.Version (showVersion)
@@ -33,23 +34,25 @@ main = do
 
 app :: MVar Handle -> Application
 app log req respond =
-    if requestMethod req == methodPost
-      then
-        bracket (takeMVar log)
-                (putMVar log)
-                (\h -> do while (/= empty)
-                                (requestBody req)
-                                (hPut h)
-                          hFlush h
-                          respond $ responseLBS
-                            status200  -- OK
-                            [("Content-Type", "text/plain")]
-                            "Logged.\r\n")
-      else
-        respond $ responseLBS
-            status405  -- Method Not Allowed
-            [("Allow", "POST"), ("Content-Type", "text/plain")]
-            "Only POST to this server.\r\n"
+    either id id $ do
+        when (requestMethod req /= methodPost) $ bad
+             status405  -- Method Not Allowed
+             [("Allow", "POST"), ("Content-Type", "text/plain")]
+             "Only POST to this server.\r\n"
+        return $
+            bracket (takeMVar log)
+                    (putMVar log)
+                    (\h -> do while (/= empty)
+                                    (requestBody req)
+                                    (hPut h)
+                              hFlush h
+                              respond $ responseLBS
+                                status200  -- OK
+                                [("Content-Type", "text/plain")]
+                                "Logged.\r\n")
+    where bad status headers body =
+            Left $ respond $ responseLBS status headers body
+          continue = Right (return () :: IO ())
 
 while :: (a->Bool) -> IO a -> (a->IO ()) -> IO ()
 while pred io act = loop
