@@ -1,2 +1,2 @@
 #!/bin/sh
-cat "$@" |curl --data-binary @- http://localhost:3042/
+cat "$@" |curl --data-binary @- -H "Content-Type: text/plain; charset=$(locale charmap)" http://localhost:3042/
