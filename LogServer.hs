@@ -3,6 +3,7 @@ import Codec.MIME.Type (Type(..), MIMEType(..))
 import Codec.MIME.Parse (parseContentType)
 import Control.Concurrent.MVar (newMVar, MVar, withMVar)
 import Control.Monad (when)
+import Control.Monad.Trans.Either (EitherT, left, right, runEitherT)
 import Data.ByteString (empty, hPut)
 import Data.ByteString.Lazy (fromStrict)
 import qualified Data.CaseInsensitive as CI
@@ -40,7 +41,7 @@ main = do
 
 app :: MVar Handle -> Application
 app log req respond =
-    either id id $ do
+    either id id =<< (runEitherT $ do
         when (requestMethod req /= methodPost) $ bad
              status405  -- Method Not Allowed
              [("Allow", "POST"), ("Content-Type", "text/plain")]
@@ -67,14 +68,14 @@ app log req respond =
                 [("Content-Type", "text/plain")]
                 "Logged.\r\n"
     where bad status headers body =
-            Left $ respond $ responseLBS status headers body
-          continue = Right (return () :: IO ())
+            left $ respond $ responseLBS status headers body
+          continue = return ()
           contentTypeBSS = fromMaybe "application/octet-stream"
                            $ lookup (CI.mk "Content-Type") (requestHeaders req)
                            -- default content-type is application/octet-stream
                            -- per RFC 2616 section 7.2.1
           contentTypeBS = fromStrict contentTypeBSS
-          contentType = (right $ decodeUtf8' contentTypeBSS) >>= parseContentType
+          contentType = (fromEither $ decodeUtf8' contentTypeBSS) >>= parseContentType
 
 while :: (a->Bool) -> IO a -> (a->IO ()) -> IO ()
 while pred io act = loop
@@ -90,9 +91,9 @@ maybeRead s = do
     (a,unparsed) <- listToMaybe $ reads s
     if unparsed == "" then Just a else Nothing
 
-right :: Either a b -> Maybe b
-right (Left _) = Nothing
-right (Right b) = Just b
+fromEither :: Either a b -> Maybe b
+fromEither (Left _) = Nothing
+fromEither (Right b) = Just b
 
 usage :: String -> String
 usage progname = "usage: " ++ progname ++ " port filename\n\
