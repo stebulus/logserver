@@ -5,3 +5,4 @@
 * in greaselog.js, handle the case of docs with no titles
   * [example](http://www.rfc-editor.org/bcp/bcp178.txt)
 * detect errors in log submission and report them to the user
+* add tests for server behaviour
