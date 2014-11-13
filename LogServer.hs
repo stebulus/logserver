@@ -3,16 +3,19 @@ import Codec.MIME.Type (Type(..), MIMEType(..))
 import Codec.MIME.Parse (parseContentType)
 import Control.Concurrent.MVar (newMVar, MVar, withMVar)
 import Control.Monad (when)
+import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Either (EitherT, left, right, runEitherT)
-import Data.ByteString (empty, hPut)
+import Data.ByteString (ByteString, empty, hPut)
 import Data.ByteString.Lazy (fromStrict)
 import qualified Data.CaseInsensitive as CI
 import Data.Maybe (listToMaybe, fromMaybe)
 import Data.Monoid (mconcat)
+import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8')
+import Data.Text.IO (hPutStr)
 import Data.Version (showVersion)
 import Network.Wai (Application, responseLBS, requestMethod, requestBody,
-    requestHeaders, Request)
+    requestHeaders, Request, Response)
 import Network.HTTP.Types (status200, status400, status415, status405,
     methodPost)
 import Network.Wai.Handler.Warp
@@ -41,50 +44,61 @@ main = do
 
 app :: MVar Handle -> Application
 app log req respond =
-    either id id =<< (runEitherT $ do
-        when (requestMethod req /= methodPost) $ bad
-             status405  -- Method Not Allowed
-             [("Allow", "POST"), ("Content-Type", "text/plain")]
-             "Only POST to this server.\r\n"
-        case fmap mimeType contentType of
-            Nothing -> bad status400  -- Bad Request
-                           [("Content-Type", "text/plain")]
-                           $ mconcat [ "Incomprehensible Content-Type: "
-                                     , contentTypeBS
-                                     , "\r\n" ]
-            Just (Text _) -> continue
-            _ -> bad status415  -- Unsupported Media Type
-                     [("Content-Type", "text/plain")]
-                     $ mconcat [ "Submit text/* to this server, not "
-                               , contentTypeBS
-                               , "\r\n" ]
-        return $ withMVar log $ \h -> do
-            while (/= empty)
-                  (requestBody req)
-                  (hPut h)
+    (runEitherT $ do
+        when (requestMethod req /= methodPost)
+             $ left $ responseLBS
+                 status405  -- Method Not Allowed
+                 [("Allow", "POST"), ("Content-Type", "text/plain")]
+                 "Only POST to this server.\r\n"
+        txt <- getText (lookup (CI.mk "Content-Type") (requestHeaders req))
+                       (requestBody req)
+        liftIO $ withMVar log $ \h -> do
+            hPutStr h txt
             hFlush h
-            respond $ responseLBS
+            return $ responseLBS
                 status200  -- OK
                 [("Content-Type", "text/plain")]
                 "Logged.\r\n"
-    where bad status headers body =
-            left $ respond $ responseLBS status headers body
-          continue = return ()
-          contentTypeBSS = fromMaybe "application/octet-stream"
-                           $ lookup (CI.mk "Content-Type") (requestHeaders req)
-                           -- default content-type is application/octet-stream
-                           -- per RFC 2616 section 7.2.1
+    ) >>= either respond respond
+
+getText :: Maybe ByteString -> IO ByteString -> EitherT Response IO Text
+getText maybeContentType input = do
+    case fmap mimeType contentType of
+        Nothing -> left $ responseLBS
+                        status400  -- Bad Request
+                        [("Content-Type", "text/plain")]
+                        $ mconcat [ "Incomprehensible Content-Type: "
+                                  , contentTypeBS
+                                  , "\r\n" ]
+        Just (Text _) -> return ()
+        _ -> left $ responseLBS
+                status415  -- Unsupported Media Type
+                [("Content-Type", "text/plain")]
+                $ mconcat [ "Submit text/* to this server, not "
+                          , contentTypeBS
+                          , "\r\n" ]
+    bss <- liftIO $ sequenceWhile (return . (/= empty)) (repeat input)
+    case decodeUtf8' $ mconcat bss of
+        Left e -> left $ responseLBS
+                    status400  -- Bad Request
+                    [("Content-Type", "text/plain")]
+                    $ "Character encoding error\r\n"
+        Right txt -> return txt
+    where contentTypeBSS = -- default per RFC 2616 section 7.2.1
+                           fromMaybe "application/octet-stream" maybeContentType
           contentTypeBS = fromStrict contentTypeBSS
           contentType = (fromEither $ decodeUtf8' contentTypeBSS) >>= parseContentType
 
-while :: (a->Bool) -> IO a -> (a->IO ()) -> IO ()
-while pred io act = loop
-    where loop = do
-            a <- io
-            if pred a
-              then do act a
-                      loop
-              else return ()
+sequenceWhile :: (Monad m) => (a -> m Bool) -> [m a] -> m [a]
+sequenceWhile pred = loop
+    where loop [] = return []
+          loop (ma:mas) = do
+                a <- ma
+                good <- pred a
+                if good
+                  then do rest <- loop mas
+                          return (a:rest)
+                  else return []
 
 maybeRead :: (Read a) => String -> Maybe a
 maybeRead s = do
