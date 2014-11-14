@@ -2,30 +2,23 @@
 import Codec.MIME.Type (Type(..), MIMEType(..), MIMEParam(..))
 import Codec.MIME.Parse (parseContentType)
 import Control.Concurrent.MVar (newMVar, MVar, withMVar)
-import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Either (EitherT, left, right, runEitherT)
-import Data.ByteString (ByteString, hPut)
-import Data.ByteString.Lazy (fromStrict)
-import qualified Data.ByteString.Lazy as L
-import qualified Data.CaseInsensitive as CI
+import Data.ByteString.Lazy (ByteString)
 import Data.Encoding (encodingFromStringExplicit, decodeLazyByteStringExplicit)
 import Data.Maybe (listToMaybe, fromMaybe)
 import Data.Monoid (mconcat)
-import Data.Text (Text, pack, unpack, toLower)
-import Data.Text.Encoding (decodeUtf8', encodeUtf8)
-import Data.Text.IO (hPutStr)
+import Data.Text.Lazy (Text, pack, unpack, toLower, toStrict, fromStrict)
+import Data.Text.Lazy.IO (hPutStr)
 import Data.Version (showVersion)
-import Network.Wai (Application, responseLBS, requestMethod, requestBody,
-    requestHeaders, Request, Response)
 import Network.HTTP.Types (ok200, badRequest400, unsupportedMediaType415,
-    methodNotAllowed405, methodPost)
-import Network.Wai.Handler.Warp
-    (runSettings, setHost, setPort, defaultSettings, Port)
+    methodNotAllowed405)
+import Network.Wai.Handler.Warp (setHost, setPort, defaultSettings, Port)
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitWith, ExitCode(..))
 import System.IO
     (stderr, hPutStrLn, withFile, IOMode(AppendMode), Handle, hFlush, FilePath)
+import Web.Scotty (scottyOpts, Options(..), ScottyM, ActionM, post, header,
+    body, text, status)
 
 import Paths_logserver (version)
 
@@ -41,65 +34,60 @@ main = do
         Right (RunServer port filename) ->
             withFile filename AppendMode $ \h -> do
                 mh <- newMVar h
-                runSettings (setHost "127.0.0.1" $ setPort port defaultSettings)
+                scottyOpts Options{ verbose = 0
+                                  , settings = setHost "127.0.0.1"
+                                             $ setPort port
+                                             $ defaultSettings
+                                  }
                             (app mh)
 
-app :: MVar Handle -> Application
-app log req respond = do
-    e <- runEitherT $ do
-        when (requestMethod req /= methodPost)
-             $ left $ responseLBS methodNotAllowed405
-                 [("Allow", "POST"), ("Content-Type", "text/plain")]
-                 "Only POST to this server.\r\n"
-        txt <- getText (lookup (CI.mk "Content-Type") (requestHeaders req))
-                       $ fmap mconcat
-                       $ sequenceWhile (return . (/= ""))
-                                       (repeat $ fmap fromStrict $ requestBody req)
-        liftIO $ withMVar log $ \h -> do
-            hPutStr h txt
-            hFlush h
-            return $ responseLBS ok200
-                [("Content-Type", "text/plain")]
-                "Logged.\r\n"
-    either respond respond e
+app :: MVar Handle -> ScottyM ()
+app log = do
+    post "/" $ do
+        hdr <- header "Content-Type"
+        bod <- body
+        case getText hdr bod of
+            Left err -> err
+            Right txt -> do
+                liftIO $ withMVar log $ \h -> do
+                    hPutStr h txt
+                    hFlush h
+                status ok200
+                text "Logged.\r\n"
 
-getText :: Maybe ByteString -> IO L.ByteString -> EitherT Response IO Text
-getText maybeContentType input = do
+getText :: Maybe Text -> ByteString -> Either (ActionM ()) Text
+getText maybeContentType bs = do
     case fmap mimeType contentType of
-        Nothing -> left $ responseLBS badRequest400
-                        [("Content-Type", "text/plain")]
-                        $ mconcat [ "Incomprehensible Content-Type: "
-                                  , contentTypeBS
-                                  , "\r\n" ]
+        Nothing -> Left $ do status badRequest400
+                             text $ mconcat [ "Incomprehensible Content-Type: "
+                                            , contentTypeT
+                                            , "\r\n" ]
         Just (Text _) -> return ()
-        _ -> left $ responseLBS unsupportedMediaType415
-                [("Content-Type", "text/plain")]
-                $ mconcat [ "Submit text/* to this server, not "
-                          , contentTypeBS
-                          , "\r\n" ]
-    enc <- maybe (left $ responseLBS badRequest400
-                        [("Content-Type", "text/plain; charset=utf-8")]
-                        $ mconcat [ "Unknown charset "
-                                  , fromStrict $ encodeUtf8 charset
-                                  , "\r\n" ])
-                 right
+        _ -> Left $ do status unsupportedMediaType415
+                       text $ mconcat [ "Submit text/* to this server, not "
+                                      , contentTypeT
+                                      , "\r\n" ]
+    enc <- maybe (Left $ do status badRequest400
+                            text $ mconcat [ "Unknown charset "
+                                           , charset
+                                           , "\r\n" ])
+                 Right
                  $ encodingFromStringExplicit $ unpack charset
-    bss <- liftIO input
-    case decodeLazyByteStringExplicit enc bss of
-        Left e -> left $ responseLBS badRequest400
-                    [("Content-Type", "text/plain; charset=utf-8")]
-                    $ mconcat [ "Character encoding error: "
-                              , fromStrict $ encodeUtf8 $ pack $ show e
-                              , "\r\n" ]
+    case decodeLazyByteStringExplicit enc bs of
+        Left e -> Left $ do status badRequest400
+                            text $ mconcat [ "Character encoding error: "
+                                           , pack $ show e
+                                           , "\r\n" ]
         Right txt -> return $ pack txt
-    where contentTypeBSS = -- default per RFC 2616 section 7.2.1
-                           fromMaybe "application/octet-stream" maybeContentType
-          contentTypeBS = fromStrict contentTypeBSS
-          contentType = (fromEither $ decodeUtf8' contentTypeBSS) >>= parseContentType
-          charset = -- default per RFC 2616 section 3.7.1
-                    fromMaybe "iso-8859-1"
+    where contentTypeT = -- default per RFC 2616 section 7.2.1
+                         fromMaybe "application/octet-stream" maybeContentType
+          contentType = parseContentType $ toStrict contentTypeT
+          charset = fromStrict
+                    -- default per RFC 2616 section 3.7.1
+                    $ fromMaybe "iso-8859-1"
                     $ lookup "charset"
-                    . map (\x -> (toLower (paramName x), paramValue x))
+                    . map (\x -> ( toLower . fromStrict . paramName $ x
+                                 , paramValue x))
                     . mimeParams
                     =<< contentType
 
