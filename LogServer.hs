@@ -1,17 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
-import Codec.MIME.Type (Type(..), MIMEType(..))
+import Codec.MIME.Type (Type(..), MIMEType(..), MIMEParam(..))
 import Codec.MIME.Parse (parseContentType)
 import Control.Concurrent.MVar (newMVar, MVar, withMVar)
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Either (EitherT, left, right, runEitherT)
-import Data.ByteString (ByteString, empty, hPut)
+import Data.ByteString (ByteString, hPut)
 import Data.ByteString.Lazy (fromStrict)
 import qualified Data.CaseInsensitive as CI
+import Data.Encoding (encodingFromStringExplicit, decodeLazyByteStringExplicit)
 import Data.Maybe (listToMaybe, fromMaybe)
 import Data.Monoid (mconcat)
-import Data.Text (Text)
-import Data.Text.Encoding (decodeUtf8')
+import Data.Text (Text, pack, unpack, toLower)
+import Data.Text.Encoding (decodeUtf8', encodeUtf8)
 import Data.Text.IO (hPutStr)
 import Data.Version (showVersion)
 import Network.Wai (Application, responseLBS, requestMethod, requestBody,
@@ -77,17 +78,34 @@ getText maybeContentType input = do
                 $ mconcat [ "Submit text/* to this server, not "
                           , contentTypeBS
                           , "\r\n" ]
-    bss <- liftIO $ sequenceWhile (return . (/= empty)) (repeat input)
-    case decodeUtf8' $ mconcat bss of
+    enc <- maybe (left $ responseLBS
+                        status400  -- Bad Request
+                        [("Content-Type", "text/plain; charset=utf-8")]
+                        $ mconcat [ "Unknown charset "
+                                  , fromStrict $ encodeUtf8 charset
+                                  , "\r\n" ])
+                 right
+                 $ encodingFromStringExplicit $ unpack charset
+    bss <- liftIO $ sequenceWhile (return . (/= ""))
+                                  (repeat $ fmap fromStrict input)
+    case decodeLazyByteStringExplicit enc $ mconcat bss of
         Left e -> left $ responseLBS
                     status400  -- Bad Request
-                    [("Content-Type", "text/plain")]
-                    $ "Character encoding error\r\n"
-        Right txt -> return txt
+                    [("Content-Type", "text/plain; charset=utf-8")]
+                    $ mconcat [ "Character encoding error: "
+                              , fromStrict $ encodeUtf8 $ pack $ show e
+                              , "\r\n" ]
+        Right txt -> return $ pack txt
     where contentTypeBSS = -- default per RFC 2616 section 7.2.1
                            fromMaybe "application/octet-stream" maybeContentType
           contentTypeBS = fromStrict contentTypeBSS
           contentType = (fromEither $ decodeUtf8' contentTypeBSS) >>= parseContentType
+          charset = -- default per RFC 2616 section 3.7.1
+                    fromMaybe "iso-8859-1"
+                    $ lookup "charset"
+                    . map (\x -> (toLower (paramName x), paramValue x))
+                    . mimeParams
+                    =<< contentType
 
 sequenceWhile :: (Monad m) => (a -> m Bool) -> [m a] -> m [a]
 sequenceWhile pred = loop
