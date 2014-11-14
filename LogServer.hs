@@ -90,25 +90,10 @@ getText maybeContentType bs = do
                   & fromMaybe "iso-8859-1"  -- default per RFC 2616 section 3.7.1
                   & fromStrict
 
-sequenceWhile :: (Monad m) => (a -> m Bool) -> [m a] -> m [a]
-sequenceWhile pred = loop
-    where loop [] = return []
-          loop (ma:mas) = do
-                a <- ma
-                good <- pred a
-                if good
-                  then do rest <- loop mas
-                          return (a:rest)
-                  else return []
-
 maybeRead :: (Read a) => String -> Maybe a
 maybeRead s = do
     (a,unparsed) <- listToMaybe $ reads s
     if unparsed == "" then Just a else Nothing
-
-fromEither :: Either a b -> Maybe b
-fromEither (Left _) = Nothing
-fromEither (Right b) = Just b
 
 usage :: String -> String
 usage progname = "usage: " ++ progname ++ " port filename\n\
