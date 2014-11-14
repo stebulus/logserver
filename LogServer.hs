@@ -1,8 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 import Codec.MIME.Type (Type(..), MIMEType(..))
 import Codec.MIME.Parse (parseContentType)
-import Control.Concurrent.MVar (newMVar, takeMVar, putMVar, MVar)
-import Control.Exception (bracket)
+import Control.Concurrent.MVar (newMVar, MVar, withMVar)
 import Control.Monad (when)
 import Data.ByteString (empty, hPut)
 import Data.ByteString.Lazy (fromStrict)
@@ -58,17 +57,15 @@ app log req respond =
                      $ mconcat [ "Submit text/* to this server, not "
                                , contentTypeBS
                                , "\r\n" ]
-        return $
-            bracket (takeMVar log)
-                    (putMVar log)
-                    (\h -> do while (/= empty)
-                                    (requestBody req)
-                                    (hPut h)
-                              hFlush h
-                              respond $ responseLBS
-                                status200  -- OK
-                                [("Content-Type", "text/plain")]
-                                "Logged.\r\n")
+        return $ withMVar log $ \h -> do
+            while (/= empty)
+                  (requestBody req)
+                  (hPut h)
+            hFlush h
+            respond $ responseLBS
+                status200  -- OK
+                [("Content-Type", "text/plain")]
+                "Logged.\r\n"
     where bad status headers body =
             Left $ respond $ responseLBS status headers body
           continue = Right (return () :: IO ())
