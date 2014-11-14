@@ -18,8 +18,8 @@ import Data.Text.IO (hPutStr)
 import Data.Version (showVersion)
 import Network.Wai (Application, responseLBS, requestMethod, requestBody,
     requestHeaders, Request, Response)
-import Network.HTTP.Types (status200, status400, status415, status405,
-    methodPost)
+import Network.HTTP.Types (ok200, badRequest400, unsupportedMediaType415,
+    methodNotAllowed405, methodPost)
 import Network.Wai.Handler.Warp
     (runSettings, setHost, setPort, defaultSettings, Port)
 import System.Environment (getArgs, getProgName)
@@ -48,8 +48,7 @@ app :: MVar Handle -> Application
 app log req respond = do
     e <- runEitherT $ do
         when (requestMethod req /= methodPost)
-             $ left $ responseLBS
-                 status405  -- Method Not Allowed
+             $ left $ responseLBS methodNotAllowed405
                  [("Allow", "POST"), ("Content-Type", "text/plain")]
                  "Only POST to this server.\r\n"
         txt <- getText (lookup (CI.mk "Content-Type") (requestHeaders req))
@@ -59,8 +58,7 @@ app log req respond = do
         liftIO $ withMVar log $ \h -> do
             hPutStr h txt
             hFlush h
-            return $ responseLBS
-                status200  -- OK
+            return $ responseLBS ok200
                 [("Content-Type", "text/plain")]
                 "Logged.\r\n"
     either respond respond e
@@ -68,21 +66,18 @@ app log req respond = do
 getText :: Maybe ByteString -> IO L.ByteString -> EitherT Response IO Text
 getText maybeContentType input = do
     case fmap mimeType contentType of
-        Nothing -> left $ responseLBS
-                        status400  -- Bad Request
+        Nothing -> left $ responseLBS badRequest400
                         [("Content-Type", "text/plain")]
                         $ mconcat [ "Incomprehensible Content-Type: "
                                   , contentTypeBS
                                   , "\r\n" ]
         Just (Text _) -> return ()
-        _ -> left $ responseLBS
-                status415  -- Unsupported Media Type
+        _ -> left $ responseLBS unsupportedMediaType415
                 [("Content-Type", "text/plain")]
                 $ mconcat [ "Submit text/* to this server, not "
                           , contentTypeBS
                           , "\r\n" ]
-    enc <- maybe (left $ responseLBS
-                        status400  -- Bad Request
+    enc <- maybe (left $ responseLBS badRequest400
                         [("Content-Type", "text/plain; charset=utf-8")]
                         $ mconcat [ "Unknown charset "
                                   , fromStrict $ encodeUtf8 charset
@@ -91,8 +86,7 @@ getText maybeContentType input = do
                  $ encodingFromStringExplicit $ unpack charset
     bss <- liftIO input
     case decodeLazyByteStringExplicit enc bss of
-        Left e -> left $ responseLBS
-                    status400  -- Bad Request
+        Left e -> left $ responseLBS badRequest400
                     [("Content-Type", "text/plain; charset=utf-8")]
                     $ mconcat [ "Character encoding error: "
                               , fromStrict $ encodeUtf8 $ pack $ show e
