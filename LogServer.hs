@@ -128,3 +128,12 @@ parseArgs _ [port,filename] =
         Just n ->
             Right $ RunServer n filename
 parseArgs progname _ = Left $ usage progname
+
+-- The following are from Control.Lens.Combinators
+infixl 1 &, <&>
+(&) :: a -> (a->b) -> b
+a & f = f a
+{-# INLINE (&) #-}
+(<&>) :: (Functor f) => f a -> (a->b) -> f b
+as <&> f = fmap f as
+{-# INLINE (<&>) #-}
