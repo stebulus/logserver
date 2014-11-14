@@ -82,14 +82,13 @@ getText maybeContentType bs = do
     where contentTypeT = -- default per RFC 2616 section 7.2.1
                          fromMaybe "application/octet-stream" maybeContentType
           contentType = parseContentType $ toStrict contentTypeT
-          charset = fromStrict
-                    -- default per RFC 2616 section 3.7.1
-                    $ fromMaybe "iso-8859-1"
-                    $ lookup "charset"
-                    . map (\x -> ( toLower . fromStrict . paramName $ x
+          charset = contentType
+                  <&> mimeParams
+                  <&> map (\x -> ( toLower . fromStrict . paramName $ x
                                  , paramValue x))
-                    . mimeParams
-                    =<< contentType
+                  >>= lookup "charset"
+                  & fromMaybe "iso-8859-1"  -- default per RFC 2616 section 3.7.1
+                  & fromStrict
 
 sequenceWhile :: (Monad m) => (a -> m Bool) -> [m a] -> m [a]
 sequenceWhile pred = loop
