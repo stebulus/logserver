@@ -7,6 +7,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Either (EitherT, left, right, runEitherT)
 import Data.ByteString (ByteString, hPut)
 import Data.ByteString.Lazy (fromStrict)
+import qualified Data.ByteString.Lazy as L
 import qualified Data.CaseInsensitive as CI
 import Data.Encoding (encodingFromStringExplicit, decodeLazyByteStringExplicit)
 import Data.Maybe (listToMaybe, fromMaybe)
@@ -52,7 +53,9 @@ app log req respond = do
                  [("Allow", "POST"), ("Content-Type", "text/plain")]
                  "Only POST to this server.\r\n"
         txt <- getText (lookup (CI.mk "Content-Type") (requestHeaders req))
-                       (requestBody req)
+                       $ fmap mconcat
+                       $ sequenceWhile (return . (/= ""))
+                                       (repeat $ fmap fromStrict $ requestBody req)
         liftIO $ withMVar log $ \h -> do
             hPutStr h txt
             hFlush h
@@ -62,7 +65,7 @@ app log req respond = do
                 "Logged.\r\n"
     either respond respond e
 
-getText :: Maybe ByteString -> IO ByteString -> EitherT Response IO Text
+getText :: Maybe ByteString -> IO L.ByteString -> EitherT Response IO Text
 getText maybeContentType input = do
     case fmap mimeType contentType of
         Nothing -> left $ responseLBS
@@ -86,9 +89,8 @@ getText maybeContentType input = do
                                   , "\r\n" ])
                  right
                  $ encodingFromStringExplicit $ unpack charset
-    bss <- liftIO $ sequenceWhile (return . (/= ""))
-                                  (repeat $ fmap fromStrict input)
-    case decodeLazyByteStringExplicit enc $ mconcat bss of
+    bss <- liftIO input
+    case decodeLazyByteStringExplicit enc bss of
         Left e -> left $ responseLBS
                     status400  -- Bad Request
                     [("Content-Type", "text/plain; charset=utf-8")]
