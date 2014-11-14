@@ -44,8 +44,8 @@ main = do
                             (app mh)
 
 app :: MVar Handle -> Application
-app log req respond =
-    (runEitherT $ do
+app log req respond = do
+    e <- runEitherT $ do
         when (requestMethod req /= methodPost)
              $ left $ responseLBS
                  status405  -- Method Not Allowed
@@ -60,7 +60,7 @@ app log req respond =
                 status200  -- OK
                 [("Content-Type", "text/plain")]
                 "Logged.\r\n"
-    ) >>= either respond respond
+    either respond respond e
 
 getText :: Maybe ByteString -> IO ByteString -> EitherT Response IO Text
 getText maybeContentType input = do
