@@ -18,7 +18,8 @@ GM_registerMenuCommand(
         GM_xmlhttpRequest({
             method: "POST",
             url: "http://localhost:3042/",
-            data: "* [" + content.document.title + "](" + content.document.location + ")\r\n",
+            data: "* [" + (content.document.title || content.document.location)
+                  + "](" + content.document.location + ")\r\n",
             onerror: alertFail,
             onload: function (resp) {
                 if (resp.status!="200") alertFail(resp);
