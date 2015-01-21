@@ -24,5 +24,13 @@ The script [`greaselog.js`][1] is a [GreaseMonkey][2] script which,
 on request, logs the title and URL of the current Firefox window in
 markdown syntax.
 
+The script [`logmd`][3] monitors a log file and updates an HTML version
+when it changes.  I like to run this script and the logserver itself
+under [`supervisord`][4]; see [`supervisord.conf`][5] for example
+stanzas to include in your own `supervisord.conf`.
+
  [1]: greaselog.js
  [2]: http://wiki.greasespot.net/Main_Page
+ [3]: logmd
+ [4]: http://supervisord.org/index.html
+ [5]: supervisord.conf
