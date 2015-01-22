@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+set -o pipefail
+while true; do
+    events=$(inotifywait -q --format %e ~/log)
+    # Race condition: events that occur during the rest of this loop
+    # might not be reflected in the .html produced.  Fixing this is
+    # probably not worth the effort.
+    case ${events} in
+        *MODIFY* | *CLOSE_WRITE* | *MOVE_SELF* )
+            sleep 0.1
+            markdown "$1" >"$1".html
+            ;;
+    esac
+done
