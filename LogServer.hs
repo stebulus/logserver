@@ -15,8 +15,8 @@ import Network.HTTP.Types (ok200, badRequest400, unsupportedMediaType415,
 import Network.Wai.Handler.Warp (setHost, setPort, defaultSettings, Port)
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitWith, ExitCode(..))
-import System.IO
-    (stderr, hPutStrLn, withFile, IOMode(AppendMode), Handle, hFlush, FilePath)
+import System.IO (stderr, hPutStrLn, withFile, IOMode(AppendMode), Handle,
+    hFlush, FilePath, hSetNewlineMode, universalNewlineMode)
 import Web.Scotty (scottyOpts, Options(..), ScottyM, ActionM, post, header,
     body, text, status)
 
@@ -33,6 +33,7 @@ main = do
             putStrLn $ "logserver-" ++ (showVersion version)
         Right (RunServer port filename) ->
             withFile filename AppendMode $ \h -> do
+                hSetNewlineMode h universalNewlineMode
                 mh <- newMVar h
                 scottyOpts Options{ verbose = 0
                                   , settings = setHost "127.0.0.1"
