@@ -7,7 +7,7 @@ import Data.ByteString.Lazy (ByteString)
 import Data.Encoding (encodingFromStringExplicit, decodeLazyByteStringExplicit)
 import Data.Maybe (listToMaybe, fromMaybe)
 import Data.Monoid (mconcat)
-import Data.Text.Lazy (Text, pack, unpack, toLower, toStrict, fromStrict)
+import Data.Text.Lazy (Text, pack, unpack, toLower, toStrict, fromStrict, replace)
 import Data.Text.Lazy.IO (hPutStr)
 import Data.Version (showVersion)
 import Network.HTTP.Types (ok200, badRequest400, unsupportedMediaType415,
@@ -79,7 +79,9 @@ getText maybeContentType bs = do
                             text $ mconcat [ "Character encoding error: "
                                            , pack $ show e
                                            , "\r\n" ]
-        Right txt -> return $ pack txt
+        Right txt -> return
+            $ replace "\r\n" "\n"   -- internet newlines to Haskell newlines
+            $ pack txt
     where contentTypeT = -- default per RFC 2616 section 7.2.1
                          fromMaybe "application/octet-stream" maybeContentType
           contentType = parseContentType $ toStrict contentTypeT
